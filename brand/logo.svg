@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">
+  <g transform="translate(-9.5,1.25) scale(2.5)">
+    <path d="M11.5 8 A4.5 4.5 0 0 1 20.5 8" fill="none" stroke="#1a3a5c" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M16 7 C11 7 7 8.5 7 10 L7 17 C7 24 10.5 29 16 31 C21.5 29 25 24 25 17 L25 10 C25 8.5 21 7 16 7 Z" fill="#1a3a5c" stroke="#2d6a4f" stroke-width="1.2"/>
+    <circle cx="16" cy="14.5" r="2.75" fill="#e8f0e8"/>
+    <path d="M13.4 16 L18.6 16 L16 22.5 Z" fill="#e8f0e8"/>
+  </g>
+
+  <text x="75" y="52" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="bold" fill="#1a3a5c" letter-spacing="-1">
+    env<tspan fill="#2d6a4f">seal</tspan>
+  </text>
+
+  <text x="75" y="76" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#5a7a8a" letter-spacing="2">
+    SECRETS SEALED IN GIT
+  </text>
+</svg>

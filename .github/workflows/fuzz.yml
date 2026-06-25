@@ -1,0 +1,52 @@
+name: Fuzz
+
+# Fuzzing runs separately from CI (ci.yml), not as a blocking PR check: it's
+# slow (minutes, not seconds) and its findings are non-deterministic — a run
+# that happens not to find anything today doesn't mean the next one won't.
+# Scheduled + manually triggerable instead, same as most fuzz setups.
+on:
+  schedule:
+    # Weekly, not nightly: this repo is private, so Actions minutes are
+    # metered rather than free. A crash found a few days later than nightly
+    # would find it is an acceptable tradeoff for the lower run cost.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds to fuzz each target for"
+        default: "120"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      # One step per Fuzz target — `go test -fuzz` only accepts a single
+      # target per invocation. Add a step here when a new FuzzXxx function
+      # is added elsewhere in the codebase.
+      - name: FuzzParse (internal/dotenv)
+        run: |
+          go test -fuzz=FuzzParse -fuzztime="${{ github.event.inputs.seconds || '120' }}s" ./internal/dotenv/
+
+      # go test -fuzz writes any crashing input to testdata/fuzz/<Func>/<hash>
+      # and exits non-zero, failing this job. It does NOT commit that file —
+      # a human needs to pull it from the job's working directory (or
+      # reproduce locally with the same -fuzz flag) and commit it as a
+      # permanent regression test alongside the fix.
+      - name: Upload crash corpus (only runs if fuzzing failed)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-crash-corpus
+          path: internal/dotenv/testdata/fuzz/
+          retention-days: 30

@@ -1,0 +1,72 @@
+version: 2
+
+project_name: envseal
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - main: .
+    binary: envseal
+    env:
+      # No cgo: removes the dynamic-linking attack surface (LD_PRELOAD-style
+      # library injection at load time) and makes builds reproducible.
+      - CGO_ENABLED=0
+    flags:
+      # Strip local filesystem paths from the binary for reproducibility.
+      - -trimpath
+    # Deterministic file timestamps so independently rebuilt archives can be
+    # byte-compared against the released ones.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - repository:
+      owner: roman-kolpachev
+      name: homebrew-tap
+      # The default GITHUB_TOKEN GitHub Actions provides is scoped only to
+      # the repo the workflow runs in (envseal) — it cannot push to a
+      # different repo (homebrew-tap) even under the same owner. A separate
+      # token with write access to homebrew-tap specifically is required;
+      # see release.yml for where HOMEBREW_TAP_GITHUB_TOKEN is set.
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/roman-kolpachev/envseal"
+    description: "Encrypt .env secrets per-key, store in git, inject at runtime"
+    license: "MIT"
+    install: |
+      bin.install "envseal"
+    test: |
+      system "#{bin}/envseal", "version"
+
+release:
+  github:
+    owner: roman-kolpachev
+    name: envseal

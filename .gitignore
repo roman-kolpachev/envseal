@@ -1,0 +1,31 @@
+# Build artifacts
+/envseal
+/envseal.exe
+*~
+
+# Test output
+coverage.out
+coverage.html
+cover.out
+
+# Editor / tooling
+.vscode
+.claude
+
+# Scratch: this repo is the tool's own source, so .envseal/ here is only ever
+# manual test data from running `envseal init` against this repo itself while
+# testing — never real project secrets meant to be tracked. .envseal.lock
+# (init's own lock, see cmd/init.go) deliberately lives outside .envseal/
+# since it must be acquirable before that directory exists.
+.envseal/
+.envseal.lock
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Brand assets: large/binary, except the two SVGs actually used
+brand/*
+!brand/logo.svg
+!brand/favicon.svg

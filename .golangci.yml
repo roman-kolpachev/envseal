@@ -1,0 +1,26 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosec
+  settings:
+    errcheck:
+      check-blank: false
+    gosec:
+      excludes: []
+  exclusions:
+    paths:
+      - testdata
+    rules:
+      # Test code operates on paths under t.TempDir() (never attacker-controlled)
+      # and uses permissive fixture permissions that carry no confidentiality
+      # requirement — production code paths are held to the stricter 0600/0700
+      # standard enforced elsewhere in this codebase and are not excluded here.
+      - path: _test\.go
+        linters:
+          - gosec

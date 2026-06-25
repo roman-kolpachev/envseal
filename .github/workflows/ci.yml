@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: CI only needs to read repository contents.
+permissions:
+  contents: read
+
+jobs:
+  test-linux:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinned to commit SHAs to prevent supply-chain attacks via
+      # mutable tags (a compromised upstream tag would otherwise run
+      # arbitrary code with access to this repository).
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # The checkout token is not needed after clone; don't leave it in
+          # .git/config where any later step (or compromised tool) can read it.
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
+        with:
+          # Pinned (not "latest") so a compromised or broken new linter release
+          # cannot silently start executing in CI without a reviewed change.
+          version: v2.12.2
+          args: --max-same-issues=0 --max-issues-per-linter=0
+
+      - run: go test ./...
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.5.0 ./...
+
+      - name: Guard against committed secrets
+        run: |
+          if git ls-files | grep -qE '(^|/)\.envseal/keys(\.[^/]*)?$'; then
+            echo "::error::.envseal/keys (a private key) is committed to the repository"
+            exit 1
+          fi
+          if git ls-files | grep -E '(^|/)\.env(\.[^/]+)?$' | grep -vE '\.(vault|example|sample|template)$' | grep -q .; then
+            echo "::error::a plaintext .env-style file is committed to the repository"
+            exit 1
+          fi
+
+      - run: go build -o envseal .
+
+      - name: E2E — init, set, and run
+        run: |
+          tmpdir=$(mktemp -d)
+          cp envseal "$tmpdir/"
+          cd "$tmpdir"
+          ./envseal init --name demo
+          ./envseal set DEMO_KEY=hello_from_envseal
+          OUTPUT=$(./envseal run -- printenv DEMO_KEY)
+          if [ "$OUTPUT" != "hello_from_envseal" ]; then
+            echo "Expected 'hello_from_envseal', got '$OUTPUT'"
+            exit 1
+          fi
+          echo "✓ E2E passed: envseal run injected DEMO_KEY correctly"
+
+  # Runs build/vet/test on Windows so a change to any *_windows.go file (the
+  # DACL/ownership checks in keyring_windows.go and exec_windows.go, the
+  # LockFileEx-based locking in lock_windows.go) is caught automatically
+  # instead of depending on someone remembering to test on a real Windows
+  # machine — see WINDOWS_TESTING.md for the manual pass that found B1–B6
+  # and F1, none of which this job would have needed a human to catch.
+  #
+  # Deliberately narrower than test-linux: no golangci-lint / govulncheck
+  # re-run (those checks are OS-independent enough not to need duplicating
+  # here), and no -race (this runner has no MinGW/GCC in PATH, so CGO_ENABLED
+  # builds fail — see WINDOWS_TESTING.md §0).
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -shuffle=on ./...
+
+      - run: go build -o envseal.exe .
+
+      # windows-latest runners ship Git for Windows, which bundles Git Bash;
+      # `shell: bash` picks it up, letting this reuse the same POSIX script
+      # as test-linux's E2E step rather than a separate PowerShell rewrite.
+      - name: E2E — init, set, and run
+        shell: bash
+        run: |
+          tmpdir=$(mktemp -d)
+          cp envseal.exe "$tmpdir/"
+          cd "$tmpdir"
+          ./envseal.exe init --name demo
+          ./envseal.exe set DEMO_KEY=hello_from_envseal
+          # printenv/coreutils availability on Windows isn't guaranteed the way
+          # it is on ubuntu-latest (see WINDOWS_TESTING.md's manual E2E pass,
+          # which used cmd/PowerShell rather than printenv for this reason) —
+          # bash itself is, since this step already runs under shell: bash.
+          OUTPUT=$(./envseal.exe run -- bash -c 'echo $DEMO_KEY')
+          if [ "$OUTPUT" != "hello_from_envseal" ]; then
+            echo "Expected 'hello_from_envseal', got '$OUTPUT'"
+            exit 1
+          fi
+          echo "✓ E2E passed: envseal run injected DEMO_KEY correctly"

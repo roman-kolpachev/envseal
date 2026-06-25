@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinned to commit SHAs to prevent supply-chain attacks via
+      # mutable tags — critical here because this workflow holds a token
+      # with contents:write and produces the released binaries.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          # goreleaser authenticates via the GITHUB_TOKEN env var below; the
+          # git-credential copy in .git/config is unneeded and only widens the
+          # blast radius of a compromised build step (token has contents:write).
+          persist-credentials: false
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN above only has write access to this repo (envseal).
+          # Pushing the generated formula to the separate homebrew-tap repo
+          # (see .goreleaser.yml's brews.repository.token) needs a distinct
+          # token with write access to homebrew-tap specifically — a
+          # fine-grained PAT scoped to just that repo, stored as this secret.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
