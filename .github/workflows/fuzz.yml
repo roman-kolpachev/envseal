@@ -38,6 +38,10 @@ jobs:
         run: |
           go test -fuzz=FuzzParse -fuzztime="${{ github.event.inputs.seconds || '120' }}s" ./internal/dotenv/
 
+      - name: FuzzMarshalValueCannotAddKeys (internal/dotenv)
+        run: |
+          go test -run='^$' -fuzz='^FuzzMarshalValueCannotAddKeys$' -fuzztime="${{ github.event.inputs.seconds || '120' }}s" ./internal/dotenv/
+
       # go test -fuzz writes any crashing input to testdata/fuzz/<Func>/<hash>
       # and exits non-zero, failing this job. It does NOT commit that file —
       # a human needs to pull it from the job's working directory (or
