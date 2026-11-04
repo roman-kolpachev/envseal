@@ -390,6 +390,49 @@ func TestIsDangerous_SecondPass(t *testing.T) {
 	}
 }
 
+// TestIsDangerous_EditorsPagersAndCLIHosts covers the review of the fix:
+// more editor/pager/helper commands, and CLI hosts that receive a token.
+func TestIsDangerous_EditorsPagersAndCLIHosts(t *testing.T) {
+	cases := []string{
+		// systemd tools (systemctl, journalctl) run SYSTEMD_PAGER and
+		// SYSTEMD_EDITOR and pass SYSTEMD_LESS to less; refused by prefix.
+		"SYSTEMD_PAGER", "SYSTEMD_EDITOR", "SYSTEMD_LESS", "SYSTEMD_PAGERSECURE", "systemd_pager",
+		// svn and cvs editor, merge tool and server programs.
+		"SVN_EDITOR", "SVN_MERGE", "CVSEDITOR", "CVS_SERVER",
+		// Mercurial config path (hooks run commands).
+		"HGRCPATH",
+		// gh: editor, pager, browser, own path, config dir (aliases run
+		// shell commands), and the host/repo it sends its token to.
+		"GH_EDITOR", "GH_PAGER", "GH_BROWSER", "GH_PATH", "GH_CONFIG_DIR",
+		"GH_HOST", "GH_REPO", "gh_host",
+		// glab sends its token to the GitLab host.
+		"GITLAB_HOST", "GL_HOST",
+		// Other pagers and editors.
+		"AWS_PAGER", "BAT_PAGER", "DELTA_PAGER", "PSQL_PAGER", "PSQL_EDITOR",
+		"FCEDIT", "SUDO_EDITOR",
+	}
+	for _, name := range cases {
+		if !IsDangerous(name) {
+			t.Errorf("IsDangerous(%q) = false, want true", name)
+		}
+	}
+}
+
+// TestIsDangerous_EditorsPagersAndCLIHostsAllowed: the tokens these tools
+// read and lookalike names stay usable.
+func TestIsDangerous_EditorsPagersAndCLIHostsAllowed(t *testing.T) {
+	safe := []string{
+		"GH_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_TOKEN", "GITLAB_TOKEN",
+		"GH_WEBHOOK_SECRET", "SVN_PASSWORD", "SYSTEMDX", "SYSTEM_ID",
+		"AWS_PAGER_X", "PSQL_PASSWORD",
+	}
+	for _, name := range safe {
+		if IsDangerous(name) {
+			t.Errorf("IsDangerous(%q) = true, want false", name)
+		}
+	}
+}
+
 // TestIsDangerous_SecondPassAllowed: runtime knobs and credentials that live
 // under a refused namespace but configure no program or destination.
 func TestIsDangerous_SecondPassAllowed(t *testing.T) {

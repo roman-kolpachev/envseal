@@ -283,6 +283,35 @@ var dangerousVars = map[string]bool{
 	"SVN_SSH":            true,
 	"HGEDITOR":           true,
 	"HGMERGE":            true,
+	// svn and cvs run these as the editor, merge tool and (for :fork:/:ext:)
+	// server program; Mercurial reads config, including hooks, from HGRCPATH.
+	"SVN_EDITOR": true,
+	"SVN_MERGE":  true,
+	"CVSEDITOR":  true,
+	"CVS_SERVER": true,
+	"HGRCPATH":   true,
+	// gh runs GH_EDITOR, GH_PAGER, GH_BROWSER and GH_PATH, reads aliases
+	// (which can be shell commands) from GH_CONFIG_DIR, and sends its token
+	// to GH_HOST or the host in GH_REPO ([HOST/]OWNER/REPO). glab sends its
+	// token to GITLAB_HOST / GL_HOST. GH_TOKEN and GITLAB_TOKEN stay allowed.
+	"GH_EDITOR":     true,
+	"GH_PAGER":      true,
+	"GH_BROWSER":    true,
+	"GH_PATH":       true,
+	"GH_CONFIG_DIR": true,
+	"GH_HOST":       true,
+	"GH_REPO":       true,
+	"GITLAB_HOST":   true,
+	"GL_HOST":       true,
+	// More pagers and editors: aws CLI output, bat, delta, psql, the bash
+	// fc builtin and sudoedit.
+	"AWS_PAGER":   true,
+	"BAT_PAGER":   true,
+	"DELTA_PAGER": true,
+	"PSQL_PAGER":  true,
+	"PSQL_EDITOR": true,
+	"FCEDIT":      true,
+	"SUDO_EDITOR": true,
 	// Daemon/API endpoints that would receive a build context, mounted build
 	// secrets, or a pod's service-account token (client-go in-cluster config).
 	"BUILDKIT_HOST":                      true,
@@ -409,6 +438,9 @@ var dangerousPrefixes = []string{
 	"BUN_CONFIG_",
 	// Helm: API server, CA file, plugin and registry config locations.
 	"HELM_",
+	// systemd tools (systemctl, journalctl, ...) run SYSTEMD_PAGER and
+	// SYSTEMD_EDITOR and pass SYSTEMD_LESS to less.
+	"SYSTEMD_",
 }
 
 // targetToolchainVars are the cc-rs variables that also come in a
