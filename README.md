@@ -25,6 +25,7 @@
 - [No lock-in](#no-lock-in)
 - [vs. alternatives](#vs-alternatives)
 - [Shell completion](#shell-completion)
+- [Security](#security)
 
 ## Why
 
@@ -737,6 +738,10 @@ envseal completion fish > ~/.config/fish/completions/envseal.fish
 # PowerShell
 envseal completion powershell | Out-String | Invoke-Expression
 ```
+
+## Security
+
+Found a vulnerability? Please report it privately, not in a public issue. [SECURITY.md](SECURITY.md) says how, and what happens next.
 
 ## License
 
