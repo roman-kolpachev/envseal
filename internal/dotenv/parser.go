@@ -284,12 +284,17 @@ func Marshal(entries []Entry) []byte {
 	for _, e := range entries {
 		buf.WriteString(e.Key)
 		buf.WriteByte('=')
-		if needsQuoting(e.Value) {
+		switch {
+		case !needsQuoting(e.Value):
+			buf.Write(e.Value)
+		case singleQuoteSafe(e.Value):
+			buf.WriteByte('\'')
+			buf.Write(e.Value)
+			buf.WriteByte('\'')
+		default:
 			buf.WriteByte('"')
 			writeEscapedDoubleQuoted(&buf, e.Value)
 			buf.WriteByte('"')
-		} else {
-			buf.Write(e.Value)
 		}
 		buf.WriteByte('\n')
 	}
@@ -313,6 +318,36 @@ func needsQuoting(value []byte) bool {
 	return false
 }
 
+// singleQuoteSafe reports whether a value can be written as '<value>' and be
+// read back unchanged by envseal's parser and by the parsers apps use on the
+// sealed secrets file or a pulled .env: Node dotenv, python-dotenv and a
+// shell `source`. They all take single-quoted text as-is, while they disagree
+// on backslash escapes inside double quotes. So single quotes fix values like
+// say "hi" or C:\path for all of them.
+//
+// Not safe, so the value keeps the escaped double-quoted form:
+//   - a single quote (it would end the value);
+//   - control characters other than tab, such as newline (they need escapes);
+//   - `\\` anywhere, or `\` at the end: python-dotenv decodes \\ and \'
+//     inside single quotes;
+//   - `$`: dotenv-expand (used by Next.js and Vite to load .env files) and
+//     python-dotenv expand variables even inside single quotes. The
+//     double-quoted form writes \$, which dotenv-expand reads as a plain $.
+func singleQuoteSafe(value []byte) bool {
+	if len(value) == 0 || value[len(value)-1] == '\\' {
+		return false
+	}
+	for i, b := range value {
+		if b == '\'' || b == '$' || (b < 0x20 && b != '\t') || b == 0x7f {
+			return false
+		}
+		if b == '\\' && i+1 < len(value) && value[i+1] == '\\' {
+			return false
+		}
+	}
+	return true
+}
+
 func isSafeUnquoted(b byte) bool {
 	return (b >= 'a' && b <= 'z') ||
 		(b >= 'A' && b <= 'Z') ||
@@ -334,8 +369,9 @@ func writeEscapedDoubleQuoted(buf *bytes.Buffer, s []byte) {
 			buf.WriteString(`\$`)
 		case '`':
 			buf.WriteString("\\`")
-		case '!':
-			buf.WriteString(`\!`)
+		// '!' is written as-is. A shell `source` and dotenv-expand keep the
+		// backslash of \! (history expansion never applies to sourced files),
+		// and Parse reads a bare ! the same as \!, so older files still work.
 		case '\t':
 			buf.WriteString(`\t`)
 		case '\n':

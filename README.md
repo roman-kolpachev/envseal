@@ -287,6 +287,14 @@ from dotenv import load_dotenv
 load_dotenv(os.environ['ENVSEAL_SECRETS'])
 ```
 
+The file uses .env syntax, and so does the file `pull` writes. Most values are written in single quotes, so a shell, Node dotenv and python-dotenv all read them exactly. A few values still need escapes, and loaders read those differently:
+
+- A value with `$` is written with `\$`. A shell and dotenv-expand (used by Next.js and Vite) read it as `$`. Plain Node dotenv and python-dotenv keep the backslash.
+- A value with a line break is written with `\n`. Node dotenv and python-dotenv read it as a line break. A shell does not.
+- A value with `\\` or a `\` at the end keeps backslash escapes. A shell and python-dotenv read it right. Node dotenv does not.
+
+`envseal run` without `--sealed` passes every value exactly, with no file in between.
+
 ### Export
 
 ```bash

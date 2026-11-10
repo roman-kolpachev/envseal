@@ -149,6 +149,79 @@ func TestMarshalMultiline(t *testing.T) {
 	}
 }
 
+// TestMarshal_SingleQuotesForLiteralValues: the sealed secrets file and
+// `pull` output are read by other parsers (Node dotenv, dotenv-expand,
+// python-dotenv, a shell `source`). They disagree on backslash escapes inside
+// double quotes, but all read single-quoted text as-is. So any value that
+// single quotes can hold for all of them is written in single quotes.
+func TestMarshal_SingleQuotesForLiteralValues(t *testing.T) {
+	cases := map[string]string{
+		`Passw0rd!`:       `'Passw0rd!'`,
+		"a\tb":            "'a\tb'",
+		`say "hi"`:        `'say "hi"'`,
+		"a`id`b":          "'a`id`b'",
+		`C:\path\to`:      `'C:\path\to'`,
+		`abc #notcomment`: `'abc #notcomment'`,
+		`  padded  `:      `'  padded  '`,
+		`{"k": [1, 2]}`:   `'{"k": [1, 2]}'`,
+		`also simple`:     `'also simple'`,
+		`пароль✓`:         `'пароль✓'`,
+	}
+	for value, want := range cases {
+		got := string(Marshal([]Entry{{Key: "K", Value: []byte(value)}}))
+		if got != "K="+want+"\n" {
+			t.Errorf("Marshal(%q) = %q, want %q", value, got, "K="+want+"\n")
+		}
+	}
+}
+
+// TestMarshal_DoubleQuotesWhenSingleQuotesCannot: values single quotes cannot
+// carry for every parser keep the escaped double-quoted form: a single quote,
+// control characters other than tab, backslash runs python-dotenv would
+// decode inside single quotes (`\\`, or a trailing `\`), and `$`, which
+// dotenv-expand would expand inside single quotes but reads as plain text
+// when written as \$. A `!` is no longer escaped.
+func TestMarshal_DoubleQuotesWhenSingleQuotesCannot(t *testing.T) {
+	cases := map[string]string{
+		`it's`:         `"it's"`,
+		`it's!`:        `"it's!"`,
+		"line1\nline2": `"line1\nline2"`,
+		"a\rb":         `"a\rb"`,
+		`a\\b`:         `"a\\\\b"`,
+		`end\`:         `"end\\"`,
+		``:             `""`,
+		`Pa$$w0rd!`:    `"Pa\$\$w0rd!"`,
+		`x${HOME}y`:    `"x\${HOME}y"`,
+	}
+	for value, want := range cases {
+		got := string(Marshal([]Entry{{Key: "K", Value: []byte(value)}}))
+		if got != "K="+want+"\n" {
+			t.Errorf("Marshal(%q) = %q, want %q", value, got, "K="+want+"\n")
+		}
+	}
+}
+
+// TestMarshal_QuotingRoundTrips: every form Marshal picks must parse back to
+// the exact value with envseal's own parser (`pull` then `sync`).
+func TestMarshal_QuotingRoundTrips(t *testing.T) {
+	values := []string{
+		`plain`, `Pa$$w0rd!`, `x${HOME}y`, `say "hi"`, "a`id`b", `C:\path\to`,
+		`abc #notcomment`, `  padded  `, `{"k": [1, 2]}`, `it's`, "line1\nline2",
+		"a\tb", `a\\b`, `end\`, ``, `a\nb`, `'`, `"`, `\`, `\'`, `'\`, `$`, `#`, ` `,
+		"it's \"both\"", `пароль✓`, `a=b==`,
+	}
+	for _, v := range values {
+		out := Marshal([]Entry{{Key: "K", Value: []byte(v)}, {Key: "NEXT", Value: []byte("x")}})
+		got, err := Parse(strings.NewReader(string(out)))
+		if err != nil {
+			t.Fatalf("Parse(Marshal(%q)) failed: %v\nmarshaled=%q", v, err, out)
+		}
+		if len(got) != 2 || got[0].Key != "K" || string(got[0].Value) != v || got[1].Key != "NEXT" {
+			t.Errorf("round trip of %q failed\nmarshaled=%q\nparsed=%+v", v, out, got)
+		}
+	}
+}
+
 func TestMultilineRoundtrip(t *testing.T) {
 	entries := []Entry{
 		{Key: "A", Value: []byte("simple")},
