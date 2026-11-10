@@ -1332,3 +1332,21 @@ func TestDiff_Removed(t *testing.T) {
 		t.Errorf("C = %q, want removed", diffMap["C"])
 	}
 }
+
+func TestSet_BlocksDangerousPrefixFamilies(t *testing.T) {
+	svc := newTestService(t)
+	ctx := context.Background()
+
+	names := []string{"GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_PARAMETERS", "NPM_CONFIG_SCRIPT_SHELL"}
+	for _, prefix := range envcheck.DangerousPrefixes() {
+		names = append(names, prefix+"SOME_SETTING")
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			err := svc.Set(ctx, name, []byte("malicious"))
+			if !errors.Is(err, ErrDangerousKey) {
+				t.Errorf("Set(%q): want ErrDangerousKey, got %v", name, err)
+			}
+		})
+	}
+}

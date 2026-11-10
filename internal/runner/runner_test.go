@@ -90,8 +90,10 @@ func TestSealedEnv_BlocksDangerousVars(t *testing.T) {
 	}
 	r := New(provider)
 	_, _, err := r.SealedEnv(context.Background())
-	if err == nil {
-		t.Error("SealedEnv() should reject dangerous variable LD_PRELOAD")
+	// Match the refusal itself, not any error: SealedEnv can fail for other
+	// reasons (temp-directory checks) that would make this pass vacuously.
+	if err == nil || !strings.Contains(err.Error(), "dangerous system variable") {
+		t.Errorf("SealedEnv() should refuse LD_PRELOAD as dangerous, got: %v", err)
 	}
 }
 
@@ -442,4 +444,65 @@ func envSliceToMap(env []string) map[string]string {
 		m[k] = v
 	}
 	return m
+}
+
+// gitConfigInjection is the vault content from the reported exploit: git
+// treats these exactly like `-c core.fsmonitor=...`, so `envseal run -- git
+// status` would run the attacker's command inside the secret-filled process.
+func gitConfigInjection() map[string][]byte {
+	return map[string][]byte{
+		"DB_PASSWORD":        []byte("hunter2"),
+		"GIT_CONFIG_COUNT":   []byte("1"),
+		"GIT_CONFIG_KEY_0":   []byte("core.fsmonitor"),
+		"GIT_CONFIG_VALUE_0": []byte("true"),
+	}
+}
+
+func TestEnv_BlocksGitConfigInjection(t *testing.T) {
+	r := New(&mockProvider{secrets: gitConfigInjection()})
+	env, err := r.Env(context.Background())
+	if err == nil {
+		t.Fatalf("Env() accepted GIT_CONFIG_* entries, env has %d vars", len(env))
+	}
+	if !strings.Contains(err.Error(), "dangerous system variable") {
+		t.Errorf("expected 'dangerous system variable' error, got: %v", err)
+	}
+}
+
+func TestSealedEnv_BlocksGitConfigInjection(t *testing.T) {
+	r := New(&mockProvider{secrets: gitConfigInjection()})
+	_, secretsFile, err := r.SealedEnv(context.Background())
+	// Require the dangerous-name refusal specifically: SealedEnv can also fail
+	// later (e.g. on the temp-directory ownership check), which must not let
+	// this test pass if the name check is missing.
+	if err == nil || !strings.Contains(err.Error(), "dangerous system variable") {
+		t.Fatalf("SealedEnv() should refuse GIT_CONFIG_* entries as dangerous, got: %v", err)
+	}
+	if secretsFile != "" {
+		t.Errorf("SealedEnv() wrote a secrets file %q despite refusing", secretsFile)
+	}
+}
+
+func TestEnv_BlocksDangerousPrefixFamilies(t *testing.T) {
+	for _, prefix := range envcheck.DangerousPrefixes() {
+		name := prefix + "SOME_SETTING"
+		t.Run(name, func(t *testing.T) {
+			r := New(&mockProvider{secrets: map[string][]byte{name: []byte("malicious")}})
+			if _, err := r.Env(context.Background()); err == nil || !strings.Contains(err.Error(), "dangerous system variable") {
+				t.Errorf("Env() should refuse %q as dangerous, got: %v", name, err)
+			}
+		})
+	}
+}
+
+func TestSealedEnv_BlocksDangerousPrefixFamilies(t *testing.T) {
+	for _, prefix := range envcheck.DangerousPrefixes() {
+		name := prefix + "SOME_SETTING"
+		t.Run(name, func(t *testing.T) {
+			r := New(&mockProvider{secrets: map[string][]byte{name: []byte("malicious")}})
+			if _, _, err := r.SealedEnv(context.Background()); err == nil || !strings.Contains(err.Error(), "dangerous system variable") {
+				t.Errorf("SealedEnv() should refuse %q as dangerous, got: %v", name, err)
+			}
+		})
+	}
 }

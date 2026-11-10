@@ -17,7 +17,7 @@
 - [How it works](#how-it-works)
 - [Install](#install)
 - [Quick start](#quick-start)
-- [Commands](#commands) — secrets, sync, run, sealed mode, export, environments, teams, rotation, audit, JSON output, verbose output
+- [Commands](#commands) — secrets, sync, run, refused variable names, sealed mode, export, environments, teams, rotation, audit, JSON output, verbose output
 - [Migrating from other tools](#migrating-from-other-tools) — SOPS, dotenvx, plain .env
 - [CI/CD](#cicd) — GitHub Actions, GitLab, CircleCI, Bitbucket, Jenkins, Azure DevOps, AWS CodeBuild, Docker, TeamCity, Fly.io, Railway
 - [Git hook](#git-hook)
@@ -238,6 +238,21 @@ envseal run --env staging -- python manage.py migrate
 ```
 
 Decrypts all secrets and injects them as environment variables into the child process.
+
+### Refused variable names
+
+The vault and the public keys are committed. Anyone who has the public keys can add a valid entry, so envseal does not trust entry names. `run`, `pull`, `export` and `set` refuse names that would let a value run code or redirect a tool:
+
+- **Whole prefixes** that tools read as config: `GIT_*` (git reads `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>` and `GIT_CONFIG_VALUE_<n>` as `-c key=value`, for example `core.fsmonitor`), `NPM_CONFIG_*` (for example `script-shell`), `YARN_*` (for example `yarnPath`), `PIP_*`, `CARGO_*` (for example `target.<triple>.runner`), `RUSTUP_*`, `BUNDLE_*`, `UV_*`, `POETRY_*`, `PDM_*`, `PIPENV_*`, `COREPACK_*`, `BUN_CONFIG_*`, `ANSIBLE_*`, `CLOUDSDK_*`, `HELM_*`, `SYSTEMD_*` (for example `SYSTEMD_PAGER`), `TF_CLI_ARGS_*`, `XDG_*`, `CGO_*`, `LD_*`, `DYLD_*`, `AWS_ENDPOINT_URL_*`. Also cc-rs target names like `CC_X86_64_UNKNOWN_LINUX_GNU`.
+- **Single variables** like `PATH`, `HOME`, `NODE_OPTIONS`, `PYTHONPATH`, `BASH_ENV`, `EDITOR`, `CC`, `CFLAGS`, `MAKEFLAGS`, `RM`, `TARGET_CC`, `RUSTFLAGS`, `GOFLAGS`, `GOCACHEPROG`, `KUBE_EDITOR`, `SVN_EDITOR`, `GH_PAGER`, `AWS_PAGER`, `JAVA_OPTS`, `LESS`, `MAKE`, `TWINE_REPOSITORY_URL`, `GH_HOST`, `GITLAB_HOST`, `AWS_ENDPOINT_URL`, `KUBERNETES_SERVICE_HOST`, `NODE_TLS_REJECT_UNAUTHORIZED`, and proxy and CA bundle variables. The full list is in [`internal/envcheck/envcheck.go`](internal/envcheck/envcheck.go).
+
+All of `GIT_*` is blocked, even names like `GIT_AUTHOR_NAME` or `GIT_TOKEN`. Git keeps adding new variables, and a list of single names already missed `GIT_CONFIG_COUNT`.
+
+Some names inside a blocked prefix are still allowed, because they do not point to a program or a server. These are the tokens `CARGO_REGISTRY_TOKEN`, `CARGO_REGISTRIES_<NAME>_TOKEN`, `YARN_NPM_AUTH_TOKEN`, `YARN_NPM_AUTH_IDENT`, `BUN_CONFIG_TOKEN`, `HELM_KUBETOKEN`, and the Node.js (libuv) settings `UV_THREADPOOL_SIZE` and `UV_USE_IO_URING`. Names that only look similar, like `GITHUB_TOKEN`, `GH_TOKEN`, `NPM_TOKEN` or `RUST_LOG`, are not affected.
+
+If your vault already has a blocked name (for example `GIT_TOKEN`), `run` stops and shows the name. Copy the value to a new name (`envseal get GIT_TOKEN`, then `envseal set REPO_TOKEN`) and remove the old one with `envseal rm GIT_TOKEN`. If a tool really needs one of these variables, set it in your shell or CI settings, not in the vault.
+
+**Limit:** this check only looks at names. It does not check who wrote an entry. Someone with the public keys can still change the value of an existing key, for example point `DATABASE_URL` or `SENTRY_DSN` to their own server. Treat changes to `.envseal/vault/*.vault` from people outside the recipient list as untrusted. You can see the key names in `git diff`, but not the values.
 
 ### Sealed mode
 
