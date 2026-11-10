@@ -22,7 +22,7 @@ Helpful details:
 - You get a first answer within 7 days.
 - We agree on the severity and a fix. We aim to ship a fixed release within 30 days of a confirmed report, sooner for high and critical issues.
 - The fix is published as a GitHub security advisory, with a CVE when the issue qualifies, and noted in the release notes.
-- You are credited in the advisory, unless you ask not to be.
+- You are credited in the advisory and listed under Acknowledgments below, unless you ask not to be.
 
 ## Scope
 
@@ -33,3 +33,11 @@ envseal protects secrets at rest: in the vault files you commit to git. It canno
 - a machine that is already compromised.
 
 Reports about these are still welcome when envseal makes them worse than they need to be, for example by leaking a secret to a place the user did not ask for.
+
+## Acknowledgments
+
+Thanks to the people who reported security issues in envseal responsibly.
+
+| Researcher | Issue | Fixed in |
+| --- | --- | --- |
+| [kta1kri](https://github.com/kta1kri) | Command execution through crafted environment names in the vault ([GHSA-9725-55gg-mppq](https://github.com/roman-kolpachev/envseal/security/advisories/GHSA-9725-55gg-mppq)) | v0.2.0 |
